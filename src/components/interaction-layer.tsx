@@ -89,7 +89,7 @@ export function InteractionLayer() {
       const ring = ringRef.current;
       const dot = dotRef.current;
       const label = labelRef.current;
-      const useCursor = !reduce && !!cursor && !!ring && !!dot && !!label;
+      const useCursor = !!cursor && !!ring && !!dot && !!label;
 
       const pointer = { x: -100, y: -100, rx: -100, ry: -100, gx: 0, gy: 0, tgx: 0, tgy: 0 };
       let frame = 0;
@@ -98,8 +98,13 @@ export function InteractionLayer() {
 
       const loop = () => {
         frame = 0;
-        pointer.rx += (pointer.x - pointer.rx) * 0.2;
-        pointer.ry += (pointer.y - pointer.ry) * 0.2;
+        if (reduce) {
+          pointer.rx = pointer.x;
+          pointer.ry = pointer.y;
+        } else {
+          pointer.rx += (pointer.x - pointer.rx) * 0.2;
+          pointer.ry += (pointer.y - pointer.ry) * 0.2;
+        }
         pointer.gx += (pointer.tgx - pointer.gx) * 0.08;
         pointer.gy += (pointer.tgy - pointer.gy) * 0.08;
 
@@ -126,7 +131,7 @@ export function InteractionLayer() {
       };
 
       const onMove = (event: PointerEvent) => {
-        if (event.pointerType !== "mouse") return;
+        if (event.pointerType === "touch") return;
         const target = event.target as Element | null;
         if (!target || !target.closest) return;
 
@@ -179,14 +184,35 @@ export function InteractionLayer() {
         wake();
       };
 
+      const onEnter = (event: PointerEvent) => {
+        if (event.pointerType === "touch") return;
+        pointer.x = event.clientX;
+        pointer.y = event.clientY;
+        pointer.rx = event.clientX;
+        pointer.ry = event.clientY;
+        if (useCursor && cursor && ring && dot) {
+          seen = true;
+          cursor.dataset.visible = "true";
+          dot.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate(-50%, -50%)`;
+          ring.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate(-50%, -50%)`;
+        }
+        wake();
+      };
+
       const onDown = () => {
         if (cursor) cursor.dataset.down = "true";
       };
       const onUp = () => {
         if (cursor) delete cursor.dataset.down;
       };
-      const onLeave = (event: MouseEvent) => {
-        if (event.relatedTarget) return;
+      const onLeave = (event: MouseEvent | PointerEvent) => {
+        if ("relatedTarget" in event && event.relatedTarget) return;
+        if (cursor) delete cursor.dataset.visible;
+        seen = false;
+        if (activeMagnet) resetMagnet(activeMagnet);
+        activeMagnet = null;
+      };
+      const onBlur = () => {
         if (cursor) delete cursor.dataset.visible;
         seen = false;
         if (activeMagnet) resetMagnet(activeMagnet);
@@ -195,16 +221,22 @@ export function InteractionLayer() {
 
       if (useCursor) root.classList.add("has-cursor");
       window.addEventListener("pointermove", onMove, { passive: true });
+      window.addEventListener("pointerenter", onEnter, { passive: true });
       window.addEventListener("pointerdown", onDown, { passive: true });
       window.addEventListener("pointerup", onUp, { passive: true });
+      window.addEventListener("blur", onBlur);
       document.addEventListener("mouseout", onLeave);
+      document.documentElement.addEventListener("mouseleave", onLeave);
 
       cleanups.push(() => {
         root.classList.remove("has-cursor");
         window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerenter", onEnter);
         window.removeEventListener("pointerdown", onDown);
         window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("blur", onBlur);
         document.removeEventListener("mouseout", onLeave);
+        document.documentElement.removeEventListener("mouseleave", onLeave);
         if (frame) window.cancelAnimationFrame(frame);
       });
     }

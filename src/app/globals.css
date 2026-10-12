@@ -303,16 +303,36 @@ h2 {
 /* cursor */
 .cursor {
   display: none;
+  pointer-events: none;
 }
 
 html.has-cursor .cursor {
   display: block;
 }
 
+/* Hide OS mouse cursor whenever hovering inside the website area */
+html.has-cursor,
+html.has-cursor body,
+html.has-cursor *,
+html.has-cursor *::before,
+html.has-cursor *::after {
+  cursor: none !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html,
+  body,
+  *,
+  *::before,
+  *::after {
+    cursor: none !important;
+  }
+}
+
 .cursor-dot,
 .cursor-ring {
   position: fixed;
-  z-index: 400;
+  z-index: 9999;
   top: 0;
   left: 0;
   pointer-events: none;
