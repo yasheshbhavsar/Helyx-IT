@@ -3,31 +3,25 @@
 import { useEffect, useRef } from "react";
 
 /**
- * One small client component that powers the site-wide interaction language:
+ * Site-wide interaction language:
  *  - scroll progress (CSS var --scroll-progress)
  *  - scroll reveals for [data-reveal] (+ [data-stagger] parents)
  *  - pointer spotlight for [data-spotlight]
  *  - magnetic pull for [data-magnetic]
- *  - a custom cursor ring with labels ([data-cursor="Visit"])
- *  - a smoothed, viewport-normalised pointer (--gx / --gy, -1..1)
- *
- * Everything is progressive: touch devices and reduced-motion users get the
- * plain, fully visible page.
+ *  - custom cursor with mix-blend-mode (scale: 0.3 default dot, scale: 1 on interactive hover)
+ *  - smoothed, viewport-normalised pointer (--gx / --gy, -1..1)
  */
 
-const INTERACTIVE = "a[href], button, summary, [role='button'], label, select";
-const TEXTUAL = "input:not([type='radio']):not([type='checkbox']), textarea";
+const INTERACTIVE = "a[href], button, summary, [role='button'], label, select, input[type='submit'], input[type='button']";
+const TEXTUAL = "input:not([type='radio']):not([type='checkbox']):not([type='submit']):not([type='button']), textarea";
 
 export function InteractionLayer() {
   const cursorRef = useRef<HTMLDivElement>(null);
-  const ringRef = useRef<HTMLSpanElement>(null);
-  const dotRef = useRef<HTMLSpanElement>(null);
   const labelRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const root = document.documentElement;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
     const cleanups: Array<() => void> = [];
 
     /* ---------- scroll progress ---------- */
@@ -65,7 +59,6 @@ export function InteractionLayer() {
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
-            // `top < 0` also reveals anything the user scrolled straight past.
             if (!entry.isIntersecting && entry.boundingClientRect.top >= 0) return;
             entry.target.classList.add("is-revealed");
             observer.unobserve(entry.target);
@@ -75,7 +68,6 @@ export function InteractionLayer() {
       );
 
       elements.forEach((el) => {
-        // Only arm what is below the fold, so the first screen never flickers.
         if (el.getBoundingClientRect().top < window.innerHeight * 0.92) return;
         el.classList.add("reveal-armed");
         observer.observe(el);
@@ -83,173 +75,150 @@ export function InteractionLayer() {
       cleanups.push(() => observer.disconnect());
     }
 
-    /* ---------- pointer driven effects (mouse / pen only) ---------- */
-    if (fine) {
-      const cursor = cursorRef.current;
-      const ring = ringRef.current;
-      const dot = dotRef.current;
-      const label = labelRef.current;
-      const useCursor = !!cursor && !!ring && !!dot && !!label;
+    /* ---------- pointer driven effects ---------- */
+    const cursor = cursorRef.current;
+    const label = labelRef.current;
+    let activeMagnet: HTMLElement | null = null;
+    let isCursorInited = false;
 
-      const pointer = { x: -100, y: -100, rx: -100, ry: -100, gx: 0, gy: 0, tgx: 0, tgy: 0 };
-      let frame = 0;
-      let activeMagnet: HTMLElement | null = null;
-      let seen = false;
+    // Smoothed pointer for 3D spatial & tilt effects (--gx / --gy)
+    const pointer = { gx: 0, gy: 0, tgx: 0, tgy: 0 };
+    let tiltFrame = 0;
+    const tiltLoop = () => {
+      tiltFrame = 0;
+      pointer.gx += (pointer.tgx - pointer.gx) * 0.08;
+      pointer.gy += (pointer.tgy - pointer.gy) * 0.08;
+      root.style.setProperty("--gx", pointer.gx.toFixed(3));
+      root.style.setProperty("--gy", pointer.gy.toFixed(3));
 
-      const loop = () => {
-        frame = 0;
-        if (reduce) {
-          pointer.rx = pointer.x;
-          pointer.ry = pointer.y;
-        } else {
-          pointer.rx += (pointer.x - pointer.rx) * 0.2;
-          pointer.ry += (pointer.y - pointer.ry) * 0.2;
-        }
-        pointer.gx += (pointer.tgx - pointer.gx) * 0.08;
-        pointer.gy += (pointer.tgy - pointer.gy) * 0.08;
+      if (Math.abs(pointer.tgx - pointer.gx) > 0.001 || Math.abs(pointer.tgy - pointer.gy) > 0.001) {
+        tiltFrame = window.requestAnimationFrame(tiltLoop);
+      }
+    };
+    const wakeTilt = () => {
+      if (!tiltFrame) tiltFrame = window.requestAnimationFrame(tiltLoop);
+    };
 
-        if (useCursor) {
-          ring!.style.transform = `translate3d(${pointer.rx.toFixed(1)}px, ${pointer.ry.toFixed(1)}px, 0) translate(-50%, -50%)`;
-        }
-        root.style.setProperty("--gx", pointer.gx.toFixed(3));
-        root.style.setProperty("--gy", pointer.gy.toFixed(3));
+    const resetMagnet = (el: HTMLElement) => {
+      el.style.setProperty("--mag-x", "0px");
+      el.style.setProperty("--mag-y", "0px");
+    };
 
-        const settling =
-          Math.abs(pointer.x - pointer.rx) > 0.2 ||
-          Math.abs(pointer.y - pointer.ry) > 0.2 ||
-          Math.abs(pointer.tgx - pointer.gx) > 0.002 ||
-          Math.abs(pointer.tgy - pointer.gy) > 0.002;
-        if (settling) frame = window.requestAnimationFrame(loop);
-      };
-      const wake = () => {
-        if (!frame) frame = window.requestAnimationFrame(loop);
-      };
+    const initCursor = () => {
+      if (cursor) {
+        cursor.classList.add("custom-cursor--init");
+      }
+      root.classList.add("has-cursor");
+      isCursorInited = true;
+    };
 
-      const resetMagnet = (el: HTMLElement) => {
-        el.style.setProperty("--mag-x", "0px");
-        el.style.setProperty("--mag-y", "0px");
-      };
+    const destroyCursor = () => {
+      if (cursor) {
+        cursor.classList.remove("custom-cursor--init");
+      }
+      isCursorInited = false;
+      if (activeMagnet) resetMagnet(activeMagnet);
+      activeMagnet = null;
+    };
 
-      const onMove = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
+    const onMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") return;
+
+      const mouseX = event.clientX;
+      const mouseY = event.clientY;
+
+      if (!isCursorInited) {
+        initCursor();
+      }
+
+      if (cursor) {
+        // Direct translate positioning matching the zip
+        cursor.style.translate = `${mouseX}px ${mouseY}px`;
+
         const target = event.target as Element | null;
-        if (!target || !target.closest) return;
-
-        pointer.x = event.clientX;
-        pointer.y = event.clientY;
-        pointer.tgx = (event.clientX / window.innerWidth) * 2 - 1;
-        pointer.tgy = (event.clientY / window.innerHeight) * 2 - 1;
-
-        if (useCursor) {
-          if (!seen) {
-            seen = true;
-            pointer.rx = pointer.x;
-            pointer.ry = pointer.y;
-            cursor!.dataset.visible = "true";
-          }
-          dot!.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate(-50%, -50%)`;
-
+        if (target && typeof target.closest === "function") {
           const labelled = target.closest<HTMLElement>("[data-cursor]");
-          let mode = "idle";
+          const isInteractive = !!target.closest(INTERACTIVE);
+          const isTextual = !!target.closest(TEXTUAL);
+
           if (labelled) {
-            mode = "label";
-            if (label!.textContent !== labelled.dataset.cursor) label!.textContent = labelled.dataset.cursor ?? "";
-          } else if (target.closest(TEXTUAL)) {
-            mode = "text";
-          } else if (target.closest(INTERACTIVE)) {
-            mode = "link";
+            cursor.classList.add("custom-cursor--label");
+            cursor.classList.remove("custom-cursor--link", "custom-cursor--text");
+            if (label && label.textContent !== labelled.dataset.cursor) {
+              label.textContent = labelled.dataset.cursor ?? "";
+            }
+          } else if (isTextual) {
+            cursor.classList.add("custom-cursor--text");
+            cursor.classList.remove("custom-cursor--link", "custom-cursor--label");
+          } else if (isInteractive) {
+            cursor.classList.add("custom-cursor--link");
+            cursor.classList.remove("custom-cursor--label", "custom-cursor--text");
+          } else {
+            cursor.classList.remove("custom-cursor--link", "custom-cursor--label", "custom-cursor--text");
           }
-          if (cursor!.dataset.mode !== mode) cursor!.dataset.mode = mode;
+
+          // Spotlight effect
+          const spot = target.closest<HTMLElement>("[data-spotlight]");
+          if (spot) {
+            const box = spot.getBoundingClientRect();
+            spot.style.setProperty("--sx", `${(mouseX - box.left).toFixed(0)}px`);
+            spot.style.setProperty("--sy", `${(mouseY - box.top).toFixed(0)}px`);
+          }
+
+          // Magnetic pull
+          const magnet = target.closest<HTMLElement>("[data-magnetic]");
+          if (activeMagnet && activeMagnet !== magnet) resetMagnet(activeMagnet);
+          activeMagnet = magnet;
+          if (magnet && !reduce) {
+            const box = magnet.getBoundingClientRect();
+            const strength = Number(magnet.dataset.magnetic) || 0.3;
+            const dx = mouseX - (box.left + box.width / 2);
+            const dy = mouseY - (box.top + box.height / 2);
+            magnet.style.setProperty("--mag-x", `${(dx * strength).toFixed(1)}px`);
+            magnet.style.setProperty("--mag-y", `${(dy * strength).toFixed(1)}px`);
+          }
         }
+      }
 
-        const spot = target.closest<HTMLElement>("[data-spotlight]");
-        if (spot) {
-          const box = spot.getBoundingClientRect();
-          spot.style.setProperty("--sx", `${(event.clientX - box.left).toFixed(0)}px`);
-          spot.style.setProperty("--sy", `${(event.clientY - box.top).toFixed(0)}px`);
-        }
+      // Update spatial coordinates
+      pointer.tgx = (mouseX / window.innerWidth) * 2 - 1;
+      pointer.tgy = (mouseY / window.innerHeight) * 2 - 1;
+      wakeTilt();
+    };
 
-        const magnet = target.closest<HTMLElement>("[data-magnetic]");
-        if (activeMagnet && activeMagnet !== magnet) resetMagnet(activeMagnet);
-        activeMagnet = magnet;
-        if (magnet && !reduce) {
-          const box = magnet.getBoundingClientRect();
-          const strength = Number(magnet.dataset.magnetic) || 0.3;
-          const dx = event.clientX - (box.left + box.width / 2);
-          const dy = event.clientY - (box.top + box.height / 2);
-          magnet.style.setProperty("--mag-x", `${(dx * strength).toFixed(1)}px`);
-          magnet.style.setProperty("--mag-y", `${(dy * strength).toFixed(1)}px`);
-        }
+    const onDown = () => {
+      if (cursor) cursor.classList.add("custom-cursor--down");
+    };
 
-        wake();
-      };
+    const onUp = () => {
+      if (cursor) cursor.classList.remove("custom-cursor--down");
+    };
 
-      const onEnter = (event: PointerEvent) => {
-        if (event.pointerType === "touch") return;
-        pointer.x = event.clientX;
-        pointer.y = event.clientY;
-        pointer.rx = event.clientX;
-        pointer.ry = event.clientY;
-        if (useCursor && cursor && ring && dot) {
-          seen = true;
-          cursor.dataset.visible = "true";
-          dot.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate(-50%, -50%)`;
-          ring.style.transform = `translate3d(${event.clientX}px, ${event.clientY}px, 0) translate(-50%, -50%)`;
-        }
-        wake();
-      };
+    const onLeave = (event: MouseEvent | PointerEvent) => {
+      if ("relatedTarget" in event && event.relatedTarget) return;
+      destroyCursor();
+    };
 
-      const onDown = () => {
-        if (cursor) cursor.dataset.down = "true";
-      };
-      const onUp = () => {
-        if (cursor) delete cursor.dataset.down;
-      };
-      const onLeave = (event: MouseEvent | PointerEvent) => {
-        if ("relatedTarget" in event && event.relatedTarget) return;
-        if (cursor) delete cursor.dataset.visible;
-        seen = false;
-        if (activeMagnet) resetMagnet(activeMagnet);
-        activeMagnet = null;
-      };
-      const onBlur = () => {
-        if (cursor) delete cursor.dataset.visible;
-        seen = false;
-        if (activeMagnet) resetMagnet(activeMagnet);
-        activeMagnet = null;
-      };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("pointerdown", onDown, { passive: true });
+    window.addEventListener("pointerup", onUp, { passive: true });
+    document.documentElement.addEventListener("mouseleave", onLeave);
 
-      if (useCursor) root.classList.add("has-cursor");
-      window.addEventListener("pointermove", onMove, { passive: true });
-      window.addEventListener("pointerenter", onEnter, { passive: true });
-      window.addEventListener("pointerdown", onDown, { passive: true });
-      window.addEventListener("pointerup", onUp, { passive: true });
-      window.addEventListener("blur", onBlur);
-      document.addEventListener("mouseout", onLeave);
-      document.documentElement.addEventListener("mouseleave", onLeave);
-
-      cleanups.push(() => {
-        root.classList.remove("has-cursor");
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerenter", onEnter);
-        window.removeEventListener("pointerdown", onDown);
-        window.removeEventListener("pointerup", onUp);
-        window.removeEventListener("blur", onBlur);
-        document.removeEventListener("mouseout", onLeave);
-        document.documentElement.removeEventListener("mouseleave", onLeave);
-        if (frame) window.cancelAnimationFrame(frame);
-      });
-    }
+    cleanups.push(() => {
+      root.classList.remove("has-cursor");
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerup", onUp);
+      document.documentElement.removeEventListener("mouseleave", onLeave);
+      if (tiltFrame) window.cancelAnimationFrame(tiltFrame);
+    });
 
     return () => cleanups.forEach((cleanup) => cleanup());
   }, []);
 
   return (
-    <div className="cursor" ref={cursorRef} aria-hidden="true">
-      <span className="cursor-ring" ref={ringRef}>
-        <span className="cursor-label" ref={labelRef} />
-      </span>
-      <span className="cursor-dot" ref={dotRef} />
+    <div className="custom-cursor" ref={cursorRef} aria-hidden="true">
+      <span className="cursor-label" ref={labelRef} />
     </div>
   );
 }

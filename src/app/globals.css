@@ -21,6 +21,8 @@
   --field: #0e0e11;
   --error: #f2a5a5;
   --shadow-soft: 0 30px 80px rgba(0, 0, 0, 0.35);
+  --shadow-medium: 0 20px 60px rgba(0, 0, 0, 0.5);
+  --shadow-hard: 0 40px 100px rgba(0, 0, 0, 0.6);
 
   /* rgb triplets so we can do rgb(var(--x) / alpha) in CSS and canvas */
   --fg-rgb: 245 245 243;
@@ -32,6 +34,8 @@
   --page-gutter: clamp(20px, 5.5vw, 88px);
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 :root[data-theme="light"] {
@@ -206,7 +210,12 @@ nextjs-portal {
 }
 
 .section-pad {
-  padding-block: clamp(80px, 11vw, 160px);
+  padding-block: clamp(100px, 14vw, 200px);
+}
+
+.section-pad,
+.hero-section {
+  transition: opacity 800ms var(--ease-out);
 }
 
 .eyebrow {
@@ -286,31 +295,29 @@ h2 {
 /* scroll reveal */
 [data-reveal].reveal-armed {
   opacity: 0;
-  translate: 0 36px;
-  filter: blur(8px);
+  translate: 0 40px;
+  filter: blur(10px);
   transition:
-    opacity 1000ms var(--ease-out) calc(var(--rd, 0) * 90ms),
-    translate 1000ms var(--ease-out) calc(var(--rd, 0) * 90ms),
-    filter 900ms var(--ease-out) calc(var(--rd, 0) * 90ms);
+    opacity 1200ms var(--ease-out) calc(var(--rd, 0) * 80ms),
+    translate 1200ms var(--ease-out) calc(var(--rd, 0) * 80ms),
+    filter 1000ms var(--ease-out) calc(var(--rd, 0) * 80ms),
+    y 1200ms var(--ease-out) calc(var(--rd, 0) * 80ms);
+  will-change: opacity, translate, filter, y;
+  transform-style: preserve-3d;
 }
 
 [data-reveal].reveal-armed.is-revealed {
   opacity: 1;
   translate: 0 0;
-  filter: none;
+  filter: blur(0);
+  transform: translate3d(0, 0, 0);
 }
 
-/* cursor */
-.cursor {
-  display: none;
-  pointer-events: none;
-}
+/* ==========================================================================
+   Custom cursor with mix-blend-mode (from zip)
+   ========================================================================== */
 
-html.has-cursor .cursor {
-  display: block;
-}
-
-/* Hide OS mouse cursor whenever hovering inside the website area */
+/* Hide OS mouse cursor whenever hovering inside the website area when custom cursor is active */
 html.has-cursor,
 html.has-cursor body,
 html.has-cursor *,
@@ -319,93 +326,68 @@ html.has-cursor *::after {
   cursor: none !important;
 }
 
-@media (hover: hover) and (pointer: fine) {
-  html,
-  body,
-  *,
-  *::before,
-  *::after {
-    cursor: none !important;
-  }
-}
-
-.cursor-dot,
-.cursor-ring {
+.custom-cursor {
   position: fixed;
-  z-index: 9999;
+  opacity: 0;
   top: 0;
   left: 0;
   pointer-events: none;
-  opacity: 0;
   mix-blend-mode: difference;
-  transition: opacity 250ms ease;
+  width: 50px;
+  margin-left: -25px;
+  margin-top: -25px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background-color: white;
+  transition-property: scale, opacity;
+  transition-duration: 250ms;
+  transition-timing-function: ease-in-out;
+  scale: 0.3;
+  z-index: 99999;
+  display: grid;
+  place-items: center;
 }
 
-.cursor[data-visible="true"] .cursor-dot,
-.cursor[data-visible="true"] .cursor-ring {
+.custom-cursor--init {
   opacity: 1;
 }
 
-.cursor-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #fff;
+.custom-cursor--link {
+  scale: 1;
 }
 
-.cursor-ring {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border: 1px solid #fff;
-  border-radius: 50%;
-  transition:
-    opacity 250ms ease,
-    width 350ms var(--ease-out),
-    height 350ms var(--ease-out),
-    background-color 250ms ease,
-    border-color 250ms ease;
+.custom-cursor--label {
+  scale: 1.6;
 }
 
-.cursor[data-mode="link"] .cursor-ring {
-  width: 60px;
-  height: 60px;
-  background: rgb(255 255 255 / 0.18);
+.custom-cursor--text {
+  scale: 0.25 0.9;
+  border-radius: 3px;
 }
 
-.cursor[data-mode="label"] .cursor-ring {
-  width: 92px;
-  height: 92px;
-  background: #fff;
+.custom-cursor--down {
+  scale: 0.22;
 }
 
-.cursor[data-mode="text"] .cursor-ring {
-  width: 4px;
-  height: 22px;
-  border-radius: 2px;
+.custom-cursor--link.custom-cursor--down {
+  scale: 0.85;
 }
 
-.cursor[data-mode="text"] .cursor-dot {
-  opacity: 0;
-}
-
-.cursor[data-down="true"] .cursor-ring {
-  width: 28px;
-  height: 28px;
-}
-
-.cursor-label {
-  color: #000;
+.custom-cursor .cursor-label {
+  color: black;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 10px;
-  letter-spacing: 0.1em;
+  font-size: 8px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  font-weight: 800;
   opacity: 0;
-  transition: opacity 200ms ease;
+  transition: opacity 180ms ease;
+  pointer-events: none;
+  white-space: nowrap;
+  user-select: none;
 }
 
-.cursor[data-mode="label"] .cursor-label {
+.custom-cursor--label .cursor-label {
   opacity: 1;
 }
 
@@ -444,7 +426,7 @@ html.has-cursor *::after {
   font-weight: 500;
   line-height: 1;
   cursor: pointer;
-  transition: translate 380ms var(--ease-out), transform 200ms ease, background-color 250ms ease, color 250ms ease;
+  transition: translate 380ms var(--ease-out), transform 200ms ease, background-color 250ms ease, color 250ms ease, box-shadow 300ms var(--ease-out), border-color 250ms ease;
 }
 
 .button--primary {
@@ -465,6 +447,11 @@ html.has-cursor *::after {
 .button--primary:hover::after,
 .button--primary:focus-visible::after {
   translate: 130% 0;
+}
+
+.button--primary:hover,
+.button--primary:focus-visible {
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.15), 0 0 0 1px rgba(255, 255, 255, 0.3);
 }
 
 .button:active {
@@ -488,7 +475,7 @@ html.has-cursor *::after {
   border-bottom: 1px solid var(--line-strong);
   font-size: 14px;
   color: var(--text-secondary);
-  transition: color 200ms ease, border-color 200ms ease, translate 380ms var(--ease-out);
+  transition: color 200ms ease, border-color 200ms ease, translate 380ms var(--ease-out), padding 200ms ease;
 }
 
 .text-link svg {
@@ -498,10 +485,11 @@ html.has-cursor *::after {
 .text-link:hover {
   border-color: var(--text);
   color: var(--text);
+  padding-left: 2px;
 }
 
 .text-link:hover svg {
-  transform: translate(3px, -3px);
+  transform: translate(4px, -3px);
 }
 
 /* "icon grows into a pill" contact button */
@@ -950,7 +938,8 @@ html.has-cursor *::after {
   isolation: isolate;
   padding-block: calc(var(--nav-height) + 40px) 120px;
   background:
-    radial-gradient(ellipse 60% 55% at 74% 46%, rgb(var(--glow) / 0.1), transparent 70%),
+    radial-gradient(ellipse 60% 55% at 74% 46%, rgb(var(--glow) / 0.12), transparent 70%),
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgb(var(--glow) / 0.05), transparent 50%),
     var(--bg);
 }
 
@@ -999,9 +988,19 @@ html.has-cursor *::after {
   position: absolute;
   inset: 8%;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(var(--glow) / 0.2), transparent 62%);
+  background: radial-gradient(circle, rgb(var(--glow) / 0.25), transparent 62%);
   filter: blur(30px);
   animation: light-breathe 7s ease-in-out infinite;
+}
+
+.hero-light::after {
+  position: absolute;
+  inset: 20%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(var(--glow) / 0.35), transparent 55%);
+  filter: blur(20px);
+  animation: light-pulse 5s ease-in-out infinite 1s;
+  content: "";
 }
 
 .hero-canvas {
@@ -1270,6 +1269,7 @@ html.has-cursor *::after {
   padding-block: clamp(14px, 2vw, 22px);
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
   mask-image: linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.3);
 }
 
 .marquee-track {
@@ -1382,8 +1382,14 @@ html.has-cursor *::after {
   background: var(--surface);
   box-shadow:
     calc(var(--ry, 0) * -3px) calc(var(--rx, 0) * 3px + 26px) 60px -24px rgb(0 0 0 / calc(0.35 + var(--lift, 0) * 0.3)),
-    0 0 0 1px rgb(var(--glow) / calc(var(--lift, 0) * 0.18));
+    0 0 0 1px rgb(var(--glow) / calc(var(--lift, 0) * 0.18)),
+    0 0 80px -20px rgb(var(--glow) / calc(var(--lift, 0) * 0.15));
   will-change: transform;
+  transition: box-shadow 600ms var(--ease-out), transform 600ms var(--ease-out), border-color 400ms ease;
+}
+
+.project-card:hover .project-visual-frame {
+  border-color: rgb(var(--glow) / 0.3);
 }
 
 .browser-chrome {
@@ -1446,11 +1452,12 @@ html.has-cursor *::after {
 .project-image {
   object-fit: cover;
   object-position: top left;
-  transition: transform 1100ms var(--ease-out);
+  transition: transform 1400ms var(--ease-out), filter 800ms ease;
 }
 
 .project-card:hover .project-image {
-  transform: scale(1.045);
+  transform: scale(1.055);
+  filter: brightness(1.05);
 }
 
 .project-glare {
@@ -1649,11 +1656,26 @@ html.has-cursor *::after {
 
 .service-row {
   border-top: 1px solid var(--line);
-  transition: background-color 400ms ease;
+  transition: background-color 400ms ease, box-shadow 400ms ease;
+}
+
+.service-row::before {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, rgb(var(--glow) / 0.06), transparent 60%);
+  transition: opacity 400ms ease;
+  content: "";
+  pointer-events: none;
+}
+
+.service-row:hover::before {
+  opacity: 1;
 }
 
 .service-row.is-open {
   background: linear-gradient(to bottom, rgb(var(--fg-rgb) / 0.04), transparent 70%);
+  box-shadow: 0 -20px 60px -30px rgb(var(--glow) / 0.08) inset;
 }
 
 .service-trigger {
@@ -1894,7 +1916,22 @@ html.has-cursor *::after {
   cursor: pointer;
   opacity: 0.45;
   background: linear-gradient(to bottom, transparent, transparent);
-  transition: opacity 500ms ease, background 500ms ease;
+  transition: opacity 500ms ease, background 500ms ease, box-shadow 400ms ease;
+}
+
+.process-step::before {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, rgb(var(--glow) / 0.08), transparent 60%);
+  border-radius: 14px;
+  transition: opacity 500ms ease;
+  content: "";
+  pointer-events: none;
+}
+
+.process-step:hover::before {
+  opacity: 1;
 }
 
 .process-step.is-done {
@@ -2102,7 +2139,7 @@ html.has-cursor *::after {
   border-radius: 10px;
   background: var(--surface);
   color: var(--text-secondary);
-  transition: border-color 300ms ease, color 300ms ease, translate 500ms var(--ease-out);
+  transition: border-color 300ms ease, color 300ms ease, translate 500ms var(--ease-out), box-shadow 400ms ease, background-color 300ms ease;
 }
 
 .about-principles li span {
@@ -2115,6 +2152,8 @@ html.has-cursor *::after {
   border-color: var(--line-strong);
   color: var(--text);
   translate: 8px 0;
+  box-shadow: 0 8px 30px rgba(0,0,0,0.3), 0 2px 8px rgba(var(--glow)/0.1);
+  background: linear-gradient(135deg, rgba(var(--glow)/0.05), transparent);
 }
 
 @media (max-width: 900px) {
@@ -2270,7 +2309,8 @@ html.has-cursor *::after {
 .form-field input:not([type="radio"]):focus,
 .form-field textarea:focus {
   border-color: var(--text);
-  box-shadow: 0 0 0 4px rgb(var(--glow) / 0.16);
+  box-shadow: 0 0 0 4px rgb(var(--glow) / 0.16), 0 8px 24px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
 }
 
 .form-field input[aria-invalid="true"],
@@ -2310,12 +2350,13 @@ html.has-cursor *::after {
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 400;
-  transition: border-color 200ms ease, color 200ms ease, background-color 250ms ease, transform 300ms var(--ease-spring);
+  transition: border-color 200ms ease, color 200ms ease, background-color 250ms ease, transform 300ms var(--ease-spring), box-shadow 250ms ease;
 }
 
 .chip:hover span {
   border-color: var(--text);
   color: var(--text);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 .chip input:checked + span {
@@ -2323,6 +2364,7 @@ html.has-cursor *::after {
   background: var(--text);
   color: var(--bg);
   transform: scale(1.03);
+  box-shadow: 0 6px 20px rgba(255,255,255,0.15), 0 2px 8px rgba(var(--glow)/0.2);
 }
 
 .chip input:focus-visible + span {
@@ -2529,12 +2571,13 @@ html.has-cursor *::after {
   gap: 6px;
   color: var(--text-secondary);
   font-size: 0.95rem;
-  transition: color 200ms ease, translate 400ms var(--ease-out);
+  transition: color 200ms ease, translate 400ms var(--ease-out), padding-left 300ms ease;
 }
 
 .footer-links-column > a:hover {
   color: var(--text);
   translate: 5px 0;
+  padding-left: 4px;
 }
 
 .footer-links-column > a.footer-contact-link {
@@ -2744,6 +2787,19 @@ html.has-cursor *::after {
   50% {
     opacity: 1;
     transform: scale(1.04);
+  }
+}
+
+@keyframes light-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(1.1);
   }
 }
 

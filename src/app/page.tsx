@@ -7,6 +7,7 @@ import { InquiryForm } from "@/components/inquiry-form";
 import { ProcessTimeline } from "@/components/process-timeline";
 import { ProjectCard } from "@/components/project-card";
 import { InteractionLayer } from "@/components/interaction-layer";
+import { SmoothScroll } from "@/components/smooth-scroll";
 import { Marquee } from "@/components/marquee";
 import { ScrubText } from "@/components/scrub-text";
 import { ServiceList } from "@/components/service-list";
@@ -38,6 +39,7 @@ export default function Home() {
       <a className="skip-link" href="#main-content">Skip to content</a>
       <SiteHeader />
       <InteractionLayer />
+      <SmoothScroll />
 
       <main id="main-content">
         <section className="hero-section" id="top" aria-labelledby="hero-heading">
